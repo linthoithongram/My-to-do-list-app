@@ -2,45 +2,54 @@
 #st.title("My To-Do List App")
 #task = st.text_input("Enter a task: ")
 import streamlit as st
+import json
+import os
+from datetime import datetime, timedelta
 
-# Initialize session state
-if 'tasks' not in st.session_state:
-    st.session_state.tasks = []
+TASK_FILE = "tasks.json"
 
-st.title("Simple To-Do List App")
+def load_tasks():
+    if os.path.exists(TASK_FILE):
+        print("Loading tasks from file...")
+        with open(TASK_FILE, "r") as f:
+            data = json.load(f)
+        now = datetime.now()
+        data = [item for item in data if now - datetime.fromisoformat(item["time"]) < timedelta(hours=24)]
+        print("Loaded tasks:", data)
+        return data
+    print("No existing task file found.")
+    return []
 
-menu = st.sidebar.radio("Menu", ["Add Tasks", "View Tasks", "Delete Task", "Exit"])
+def save_tasks(task_list):
+    print("Saving tasks to file:", task_list)
+    with open(TASK_FILE, "w") as f:
+        json.dump(task_list, f)
 
-if menu == "Add Tasks":
-    multi_task_input = st.text_input("Enter tasks (separated by commas):")
-    if st.button("Add Tasks"):
-        if multi_task_input.strip():
-            # Split tasks by comma and strip spaces
-            new_tasks = [task.strip() for task in multi_task_input.split(",") if task.strip()]
-            st.session_state.tasks.extend(new_tasks)
-            st.success(f"Added {len(new_tasks)} task(s).")
-        else:
-            st.warning("Please enter at least one task.")
+st.title("📝 My To-Do List (24-Hour Tasks)")
 
-elif menu == "View Tasks":
-    if not st.session_state.tasks:
-        st.info("There are no tasks in the list!")
-    else:
-        st.subheader("Your Tasks:")
-        for i, task in enumerate(st.session_state.tasks):
-            st.write(f"{i + 1}. {task}")
+if "tasks" not in st.session_state:
+    st.session_state.tasks = load_tasks()
 
-elif menu == "Delete Task":
-    if not st.session_state.tasks:
-        st.info("There are no tasks to delete!")
-    else:
-        st.subheader("Your Tasks:")
-        for i, task in enumerate(st.session_state.tasks):
-            st.write(f"{i + 1}. {task}")
-        task_number = st.number_input("Enter the task number to delete:", min_value=1, max_value=len(st.session_state.tasks), step=1)
-        if st.button("Delete"):
-            removed = st.session_state.tasks.pop(task_number - 1)
-            st.success(f"Removed: {removed}")
+new_tasks_input = st.text_input("Enter tasks separated by commas:")
 
-elif menu == "Exit":
-    st.info("Goodbye! Have a great day.")
+if st.button("Add Tasks"):
+    new_tasks = [t.strip() for t in new_tasks_input.split(",") if t.strip()]
+    for task in new_tasks:
+        st.session_state.tasks.append({"task": task, "time": datetime.now().isoformat()})
+    save_tasks(st.session_state.tasks)
+    st.success(f"Added: {', '.join([t['task'] for t in st.session_state.tasks[-len(new_tasks):]])}")
+
+st.subheader("Your Tasks (stay for 24 hours):")
+if st.session_state.tasks:
+    for i, task in enumerate(st.session_state.tasks):
+        col1, col2 = st.columns([0.9, 0.1])
+        with col1:
+            st.write(f"{i+1}. {task['task']}")
+        with col2:
+            if st.button("❌", key=f"del_{i}"):
+                st.session_state.tasks.pop(i)
+                save_tasks(st.session_state.tasks)
+                st.experimental_rerun()
+else:
+    st.info("No tasks yet. Add some above!")
+
